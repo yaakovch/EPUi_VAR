@@ -1,0 +1,64 @@
+---
+title: "Baker_et_al_Replication"
+author: "Yaakov Chen Zion"
+date: "4/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r Load Packages and Data}
+rm(list = ls())
+library(pacman)
+p_load(
+  vars,
+  savrs,
+  tidyverse
+)
+df <- read_csv("data_epu.csv")
+
+# months = 3
+```
+
+For magnitudes note investment falls by 8.4% on average in post-WWII recessions 
+
+```{r Basic regressions}
+lm(data = df, formula = lgross ~ recession + yq)
+lm(data = df, formula = lemp ~ recession + yq)
+#df = ts_tbl(df, start = c(1900, 1), frequency = 12)
+#df <- df %>%
+#  mutate(ym2 = ym^2)
+irfs <- df %>%
+  filter(year >= 1985) %>% 
+    select(c(epu, lsp, ffr, lemp, lgdp)) %>%
+drop_na() %>%
+  VAR(p = 1)
+irfs <- df %>%
+  filter(year >= 1985) %>%
+  select(c(epu, lsp, ffr, lemp, lgdp)) %>%
+  drop_na() %>%
+  VAR(p = 1) %>%
+  irf(n.ahead = 36)
+
+
+chuck(irfs, "irf", "epu") %>%
+  data.frame() %>%
+  select(lgdp) %>%
+  mutate(lgdp = lgdp * 230) %>%
+  add_column(ind = seq(1, (nrow(.)))) %>%
+  ggplot(aes(ind, lgdp)) +
+  geom_line()
+
+chuck(irfs, "irf", "epu") %>%
+  data.frame() %>%
+  select(lemp) %>%
+  mutate(lemp = lemp * 930) %>%
+  add_column(ind = seq(1, (nrow(.)))) %>%
+  ggplot(aes(ind, lemp)) +
+  geom_line()
+
+```
