@@ -1,0 +1,338 @@
+---
+title: "EPUi_q"
+author: "Yaakov Chen Zion"
+date: "5/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Load Packages and Data}
+rm(list = ls())
+library(vars)
+library(readxl)
+library(aTSA)
+library(tidyverse)
+library(ggpubr)
+
+df <- read_excel("EPUI_Data_activity_ALL_q.xlsx",
+  sheet = "DATA"
+) |>
+select(
+  year, quarter, epu, fx_us, ta_125, fx_ner_ef,
+  i_il, emp_il_sa, gdp_il_sa, fx_eu, fx_japan, fx_uk
+) |>
+mutate(epu = log(epu)) |>
+mutate(fx_us = log(fx_us)) |>
+mutate(ta_125 = log(ta_125)) |>
+mutate(i_il = log(i_il)) |>
+mutate(emp_il_sa = log(emp_il_sa)) |>
+mutate(gdp_il_sa = log(gdp_il_sa)) |>
+mutate(lag_epu = epu - lag(epu)) |>
+mutate(lag_fx_us = fx_us - lag(fx_us)) |>
+mutate(lag_ta_125 = ta_125 - lag(ta_125)) |>
+mutate(lag_i_il = i_il - lag(i_il)) |>
+mutate(lag_emp_il_sa = emp_il_sa - lag(emp_il_sa)) |>
+mutate(lag_gdp_il_sa = gdp_il_sa - lag(gdp_il_sa)) |>
+mutate(fx_eff = ifelse(year > 1999, fx_ner_ef,
+  0.75 * fx_us +
+    0.07 * fx_japan + 0.18 * fx_uk
+)) |>
+mutate(fx_eff = log(fx_eff)) |>
+mutate(lag_fx_eff = fx_eff - lag(fx_eff)) |>
+filter(year <= 2019) |>
+filter(year >= 1995) |>
+slice(2:n())
+
+df |>
+select(-c(year, quarter)) |>
+map(kpss.test)
+
+df |>
+select(-c(year, quarter)) |>
+map(adf.test)
+
+
+df |>
+select(fx_eff, epu, i_il, emp_il_sa, gdp_il_sa) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VARselect(type = "both")
+
+df |>
+select(epu, fx_eff, i_il, emp_il_sa, gdp_il_sa) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 8, type = "const")
+
+irf_1 <- df |>
+select(epu, fx_eff, i_il, emp_il_sa, gdp_il_sa) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 8, type = "both") |>
+irf(n.ahead = 6, runs = 1000, ci = 0.90, impulse = "epu", response = "gdp_il_sa") |>
+plot()
+title("Effect of EPU on GDP - log levels - 8 lags")
+
+
+p_2 <- df |>
+select(epu, fx_eff, i_il, emp_il_sa, gdp_il_sa) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 8, ic = "AIC", type = "both", lag.max = 8) |>
+chuck("p", "AIC(n)") |>
+as.character()
+
+irf_2 <- df |>
+select(epu, fx_eff, i_il, emp_il_sa, gdp_il_sa) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 8, ic = "AIC", type = "both", lag.max = 8) |>
+irf(n.ahead = 6, runs = 1000, ci = 0.90, impulse = "epu", response = "gdp_il_sa") |>
+plot()
+title(paste0("Effect of EPU on GDP -
+             log levels - AIC (", p_2, " lags)"))
+
+irf_3 <- df |>
+select(
+  lag_epu, lag_fx_eff, lag_i_il,
+  lag_emp_il_sa, lag_gdp_il_sa
+) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 8) |>
+irf(
+  n.ahead = 6, cumulative = TRUE,  runs = 1000, ci = 0.90, impulse = "lag_epu",
+  response = "lag_gdp_il_sa"
+) |>
+plot()
+title("Effect of EPU on GDP - log change - 8 lags")
+
+p_4 <- df |>
+select(
+  lag_epu, lag_fx_eff, lag_i_il,
+  lag_emp_il_sa, lag_gdp_il_sa
+) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 8, ic = "AIC", lag.max = 8) |>
+chuck("p", "AIC(n)") |>
+as.character()
+irf_4 <- df |>
+select(
+  lag_epu, lag_fx_eff, lag_i_il,
+  lag_emp_il_sa, lag_gdp_il_sa
+) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 8, ic = "AIC", lag.max = 8) |>
+irf(
+  n.ahead = 6, cumulative = TRUE,  runs = 1000, ci = 0.90, impulse = "lag_epu",
+  response = "lag_gdp_il_sa"
+) |>
+plot()
+title(paste0("Effect of EPU on GDP -
+             log change - AIC (", p_4, " lags)"))
+
+df |>
+mutate(time = year + (1 / 4) * quarter) |>
+mutate(lag_gdp_il_sa = 40 * lag_gdp_il_sa) |>
+select(time, lag_epu, lag_gdp_il_sa) |>
+rename(epu = lag_epu) |>
+rename(gdp = lag_gdp_il_sa) |>
+pivot_longer(cols = -time) |>
+ggplot() +
+  geom_line(aes(x = time, y = value, color = name)) +
+  ggtitle("Gdp growth (scaled) and epu change") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+df |>
+mutate(time = year + (1 / 4) * quarter) |>
+mutate(
+  lag_gdp_il_sa =
+    rollmean(25 * lag_gdp_il_sa, 4, na.pad = T)
+) |>
+mutate(lag_epu = rollmean(lag_epu, 4, na.pad = T)) |>
+select(time, lag_epu, lag_gdp_il_sa) |>
+rename(annual_epu = lag_epu) |>
+rename(annual_gdp = lag_gdp_il_sa) |>
+pivot_longer(cols = -time) |>
+ggplot() +
+  geom_line(aes(x = time, y = value, color = name)) +
+  ggtitle("Annual gdp growth (scaled) and Annual epu change") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r pretty graphs}
+
+b_irf <- function(impulse, shock, response) {
+  number_ticks <- function(n) {
+    function(limits) pretty(limits, n)
+  }
+  nlags = nrow(chuck(impulse, "irf", shock))
+  irf <- tibble(
+    base = chuck(impulse, "irf", shock) |>
+    as_tibble() |> select(response) |> pull(),
+    Lower = chuck(impulse, "Lower", shock) |>
+    as_tibble() |> select(response)|> pull(),
+    Upper = chuck(impulse, "Upper", shock) |>
+    as_tibble() |> select(response)|> pull(),
+    lags = c(1:nlags)
+  )
+
+  b_irf <- ggplot(data = irf, aes(lags, base)) +
+    geom_line(aes(y = Upper), colour = "lightblue2") +
+    geom_line(aes(y = Lower), colour = "lightblue") +
+    geom_line(aes(y = base)) +
+    geom_ribbon(aes(x = lags, ymax = Upper, ymin = Lower), fill = "lightblue", alpha = .1) +
+    xlab("") +
+    ylab(shock) +
+    ggtitle(paste0(
+      "Orthogonal Impulse Response \n of ",
+      shock, " on ", response
+    )) +
+    theme(
+      # axis.title.x = element_blank(),
+      # axis.text.x = element_blank(),
+      # axis.ticks.x = element_blank(),
+      # axis.title.y = element_blank(),
+      # axis.text.y = element_blank(),
+      # axis.ticks.y = element_blank(),
+      # plot.margin = unit(c(2, 10, 2, 10), "mm")
+    ) +
+    scale_x_continuous(breaks = number_ticks(nlags)) +
+    geom_line(colour = "black") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    geom_hline(yintercept = 0, color = "red")
+}
+
+
+df |>
+select(epu, fx_eff, i_il, emp_il_sa, gdp_il_sa) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 8, type = "both") |>
+irf(n.ahead = 6, runs = 1000, ci = 0.90) |>
+b_irf("epu", "gdp_il_sa") +
+  ggtitle("Effect of EPU on GDP - log levels - 8 lags")
+
+df |>
+select(epu, fx_eff, i_il, emp_il_sa, gdp_il_sa) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 8, ic = "AIC", type = "both", lag.max = 8) |>
+irf(n.ahead = 6, runs = 1000, ci = 0.90) |>
+b_irf("epu", "gdp_il_sa") +
+  ggtitle(paste0("Effect of EPU on GDP -
+             log levels - AIC (", p_2, " lags)"))
+
+df |>
+select(
+  lag_epu, lag_fx_eff, lag_i_il,
+  lag_emp_il_sa, lag_gdp_il_sa
+) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 8) |>
+irf(
+  n.ahead = 6, cumulative = TRUE,  runs = 1000, ci = 0.90
+)  |>
+b_irf("lag_epu", "lag_gdp_il_sa") +
+  ggtitle("Effect of EPU on GDP - log change - 8 lags")
+
+df |>
+select(
+  lag_epu, lag_fx_eff, lag_i_il,
+  lag_emp_il_sa, lag_gdp_il_sa
+) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 8, ic = "AIC", lag.max = 8) |>
+irf(
+  n.ahead = 6, cumulative = TRUE,  runs = 1000, ci = 0.90
+) |>
+b_irf("lag_epu", "lag_gdp_il_sa") +
+  ggtitle(paste0("Effect of EPU on GDP -
+             log change - AIC (", p_4, " lags)"))
+
+```
+
+```{r ggarange}
+
+b_irf <- function(impulse, shock, response) {
+  number_ticks <- function(n) {
+    function(limits) pretty(limits, n)
+  }
+  nlags = nrow(chuck(impulse, "irf", shock))
+  irf <- tibble(
+    base = chuck(impulse, "irf", shock) |>
+    as_tibble() |> select(response) |> pull(),
+    Lower = chuck(impulse, "Lower", shock) |>
+    as_tibble() |> select(response)|> pull(),
+    Upper = chuck(impulse, "Upper", shock) |>
+    as_tibble() |> select(response)|> pull(),
+    lags = c(1:nlags)
+  )
+
+  b_irf <- ggplot(data = irf, aes(lags, base)) +
+    geom_line(aes(y = Upper), colour = "lightblue2") +
+    geom_line(aes(y = Lower), colour = "lightblue") +
+    geom_line(aes(y = base)) +
+    geom_ribbon(aes(x = lags, ymax = Upper, ymin = Lower), fill = "lightblue", alpha = .1) +
+    xlab("") +
+    ylab(shock) +
+    ggtitle(paste0(
+      "Orthogonal Impulse Response \n of ",
+      shock, " on ", response
+    )) +
+    theme(
+      axis.title.x = element_blank(),
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.title.y = element_blank(),
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      # plot.margin = unit(c(2, 10, 2, 10), "mm")
+    ) +
+    scale_x_continuous(breaks = number_ticks(nlags)) +
+    geom_line(colour = "black") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    geom_hline(yintercept = 0, color = "red") +
+    theme(plot.title = element_text(size = 6))
+}
+
+levels <- df |>
+select(epu, fx_eff, i_il, emp_il_sa, gdp_il_sa) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 8, type = "both") |>
+irf(n.ahead = 6, runs = 1000, ci = 0.90)
+
+endos <- c("epu", "fx_eff", "i_il", "emp_il_sa", "gdp_il_sa")
+gr_levels <- list_along(seq(1, 25))
+cnt <- 0
+for (res in endos) {
+  for (shock in endos) {
+    cnt <- cnt + 1
+    gr_levels[[cnt]] <- b_irf(levels, res, shock)
+  }
+}
+
+ggarrange(plotlist = gr_levels)
+
+changes <- df |>
+select(
+  lag_epu, lag_fx_eff, lag_i_il,
+  lag_emp_il_sa, lag_gdp_il_sa
+) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 8, ic = "AIC", lag.max = 8) |>
+irf(
+  n.ahead = 6, cumulative = TRUE,  runs = 1000, ci = 0.90
+)
+
+endos <- c(
+  "lag_epu", "lag_fx_eff", "lag_i_il",
+  "lag_emp_il_sa", "lag_gdp_il_sa"
+)
+gr_changes <- list_along(seq(1, 25))
+cnt <- 0
+for (res in endos) {
+  for (shock in endos) {
+    cnt <- cnt + 1
+    gr_changes[[cnt]] <- b_irf(changes, res, shock)
+  }
+}
+
+ggarrange(plotlist = gr_changes)
+```
+
