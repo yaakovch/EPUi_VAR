@@ -16,6 +16,9 @@ library(readxl)
 library(aTSA)
 library(tidyverse)
 library(ggpubr)
+library(devtools)
+load_all(path = "c:\\google_drive\\Resources\\r_package\\Yaakov")
+
 
 df <- read_excel("EPUI_Data_activity_ALL_q.xlsx",
   sheet = "DATA"
@@ -294,7 +297,7 @@ b_irf <- function(impulse, shock, response) {
 levels <- df |>
 select(epu, fx_eff, i_il, emp_il_sa, gdp_il_sa) |>
 ts(start = c(1995, 2), frequency = 4) |>
-VAR(p = 8, type = "both") |>
+VAR(p = 8, ic = "AIC", type = "both", lag.max = 8) |>
 irf(n.ahead = 6, runs = 1000, ci = 0.90)
 
 endos <- c("epu", "fx_eff", "i_il", "emp_il_sa", "gdp_il_sa")
@@ -307,7 +310,7 @@ for (res in endos) {
   }
 }
 
-ggarrange(plotlist = gr_levels)
+fig_4 = ggarrange(fig_4_1, fig_4_2, fig_4_3, fig_4_4)
 
 changes <- df |>
 select(
@@ -336,3 +339,258 @@ for (res in endos) {
 ggarrange(plotlist = gr_changes)
 ```
 
+```{r Figure 4}
+
+b_irf <- function(impulse, shock, response) {
+  number_ticks <- function(n) {
+    function(limits) pretty(limits, n)
+  }
+  nlags = nrow(chuck(impulse, "irf", shock))
+  irf <- tibble(
+    base = chuck(impulse, "irf", shock) |>
+    as_tibble() |> select(response) |> pull(),
+    Lower = chuck(impulse, "Lower", shock) |>
+    as_tibble() |> select(response)|> pull(),
+    Upper = chuck(impulse, "Upper", shock) |>
+    as_tibble() |> select(response)|> pull(),
+    lags = c(1:nlags)
+  )
+
+  b_irf <- ggplot(data = irf, aes(lags, base)) +
+    geom_line(aes(y = Upper), colour = "lightblue2") +
+    geom_line(aes(y = Lower), colour = "lightblue") +
+    geom_line(aes(y = base)) +
+    geom_ribbon(aes(x = lags, ymax = Upper, ymin = Lower), fill = "lightblue", alpha = .1) +
+    xlab("") +
+    ylab(shock) +
+    ggtitle(paste0(
+      "Orthogonal Impulse Response \n of ",
+      shock, " on ", response
+    )) +
+    theme(
+      # axis.title.x = element_blank(),
+      # axis.text.x = element_blank(),
+      # axis.ticks.x = element_blank(),
+      # axis.title.y = element_blank(),
+      # axis.text.y = element_blank(),
+      # axis.ticks.y = element_blank(),
+      # plot.margin = unit(c(2, 10, 2, 10), "mm")
+    ) +
+    scale_x_continuous(breaks = number_ticks(nlags)) +
+    geom_line(colour = "black") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    geom_hline(yintercept = 0, color = "red") + 
+    xlab(element_blank())+
+    ylab(element_blank())+
+    theme_Publication(36)
+}
+
+endos <- c("epu", "fx_eff", "i_il", "emp_il_sa", "gdp_il_sa")
+gr_levels <- list_along(seq(1, 25))
+cnt <- 0
+for (res in endos) {
+  for (shock in endos) {
+    cnt <- cnt + 1
+    gr_levels[[cnt]] <- b_irf(levels, res, shock)
+  }
+}
+ggarrange(plotlist = gr_levels)
+fig_4_1 = gr_levels[[5]] + ggtitle("GDP")
+fig_4_2 = gr_levels[[4]] + ggtitle("Employment")
+fig_4_3 = gr_levels[[3]] + ggtitle("Interest rate")
+fig_4_4 = gr_levels[[2]] + ggtitle("Exchange rate")
+
+fig_4 = ggarrange(fig_4_1, fig_4_2, fig_4_3, fig_4_4) |> 
+  annotate_figure(top = text_grob("Effect of orthogonal epu shock", 
+               face = "bold", size = 48))
+print(fig_4)
+gg.save(fig_4, "fig_4")
+
+
+```
+
+
+```{r Figure 5}
+
+
+endos <- c("lag_epu", "lag_fx_eff", "lag_i_il", 
+           "lag_emp_il_sa", "lag_gdp_il_sa")
+gr_changes <- list_along(seq(1, 25))
+cnt <- 0
+for (res in endos) {
+  for (shock in endos) {
+    cnt <- cnt + 1
+    gr_changes[[cnt]] <- b_irf(changes, res, shock)
+  }
+}
+ggarrange(plotlist = gr_levels)
+fig_5_1 = gr_changes[[5]] + ggtitle("GDP")
+fig_5_2 = gr_changes[[4]] + ggtitle("Employment")
+fig_5_3 = gr_changes[[3]] + ggtitle("Interest rate")
+fig_5_4 = gr_changes[[2]] + ggtitle("Exchange rate")
+
+fig_5 = ggarrange(fig_5_1, fig_5_2, fig_5_3, fig_5_4) |> 
+  annotate_figure(top = text_grob("Effect of orthogonal epu shock", 
+               face = "bold", size = 48))
+print(fig_5)
+gg.save(fig_5, "fig_5")
+
+```
+
+
+
+```{r Figure 6}
+
+b_irf <- function(impulse, shock, response) {
+  number_ticks <- function(n) {
+    function(limits) pretty(limits, n)
+  }
+  nlags = nrow(chuck(impulse, "irf", shock))
+  irf <- tibble(
+    base = chuck(impulse, "irf", shock) |>
+    as_tibble() |> select(response) |> pull(),
+    Lower = chuck(impulse, "Lower", shock) |>
+    as_tibble() |> select(response)|> pull(),
+    Upper = chuck(impulse, "Upper", shock) |>
+    as_tibble() |> select(response)|> pull(),
+    lags = c(1:nlags)
+  )
+
+  b_irf <- ggplot(data = irf, aes(lags, base)) +
+    geom_line(aes(y = Upper), colour = "lightblue2") +
+    geom_line(aes(y = Lower), colour = "lightblue") +
+    geom_line(aes(y = base)) +
+    geom_ribbon(aes(x = lags, ymax = Upper, ymin = Lower), fill = "lightblue", alpha = .1) +
+    xlab("") +
+    ylab(shock) +
+    ggtitle(paste0(
+      "Orthogonal Impulse Response \n of ",
+      shock, " on ", response
+    )) +
+    theme(
+      # axis.title.x = element_blank(),
+      # axis.text.x = element_blank(),
+      # axis.ticks.x = element_blank(),
+      # axis.title.y = element_blank(),
+      # axis.text.y = element_blank(),
+      # axis.ticks.y = element_blank(),
+      # plot.margin = unit(c(2, 10, 2, 10), "mm")
+    ) +
+    scale_x_continuous(breaks = number_ticks(nlags)) +
+    geom_line(colour = "black") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    geom_hline(yintercept = 0, color = "red") + 
+    xlab(element_blank())+
+    ylab(element_blank())+
+    theme_Publication(36)
+}
+
+
+levels <- df |>
+select(epu, fx_eff, i_il, emp_il_sa, gdp_il_sa) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 1, type = "both") |>
+irf(n.ahead = 6, runs = 1000, ci = 0.90)
+
+
+endos <- c("epu", "fx_eff", "i_il", "emp_il_sa", "gdp_il_sa")
+gr_levels <- list_along(seq(1, 25))
+cnt <- 0
+for (res in endos) {
+  for (shock in endos) {
+    cnt <- cnt + 1
+    gr_levels[[cnt]] <- b_irf(levels, res, shock)
+  }
+}
+ggarrange(plotlist = gr_levels)
+fig_6_1 = gr_levels[[5]] + ggtitle("GDP")
+fig_6_2 = gr_levels[[4]] + ggtitle("Employment")
+fig_6_3 = gr_levels[[3]] + ggtitle("Interest rate")
+fig_6_4 = gr_levels[[2]] + ggtitle("Exchange rate")
+
+fig_6 = ggarrange(fig_6_1, fig_6_2, fig_6_3, fig_6_4) |> 
+  annotate_figure(top = text_grob("Effect of orthogonal epu shock", 
+               face = "bold", size = 48))
+print(fig_6)
+gg.save(fig_6, "fig_6")
+
+
+```
+
+```{r Figure 7}
+
+b_irf <- function(impulse, shock, response) {
+  number_ticks <- function(n) {
+    function(limits) pretty(limits, n)
+  }
+  nlags = nrow(chuck(impulse, "irf", shock))
+  irf <- tibble(
+    base = chuck(impulse, "irf", shock) |>
+    as_tibble() |> select(response) |> pull(),
+    Lower = chuck(impulse, "Lower", shock) |>
+    as_tibble() |> select(response)|> pull(),
+    Upper = chuck(impulse, "Upper", shock) |>
+    as_tibble() |> select(response)|> pull(),
+    lags = c(1:nlags)
+  )
+
+  b_irf <- ggplot(data = irf, aes(lags, base)) +
+    geom_line(aes(y = Upper), colour = "lightblue2") +
+    geom_line(aes(y = Lower), colour = "lightblue") +
+    geom_line(aes(y = base)) +
+    geom_ribbon(aes(x = lags, ymax = Upper, ymin = Lower), fill = "lightblue", alpha = .1) +
+    xlab("") +
+    ylab(shock) +
+    ggtitle(paste0(
+      "Orthogonal Impulse Response \n of ",
+      shock, " on ", response
+    )) +
+    theme(
+      # axis.title.x = element_blank(),
+      # axis.text.x = element_blank(),
+      # axis.ticks.x = element_blank(),
+      # axis.title.y = element_blank(),
+      # axis.text.y = element_blank(),
+      # axis.ticks.y = element_blank(),
+      # plot.margin = unit(c(2, 10, 2, 10), "mm")
+    ) +
+    scale_x_continuous(breaks = number_ticks(nlags)) +
+    geom_line(colour = "black") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    geom_hline(yintercept = 0, color = "red") + 
+    xlab(element_blank())+
+    ylab(element_blank())+
+    theme_Publication(36)
+}
+
+
+levels <- df |>
+select(epu, fx_eff, i_il, emp_il_sa, gdp_il_sa) |>
+ts(start = c(1995, 2), frequency = 4) |>
+VAR(p = 4, type = "both") |>
+irf(n.ahead = 6, runs = 1000, ci = 0.90)
+
+
+endos <- c("epu", "fx_eff", "i_il", "emp_il_sa", "gdp_il_sa")
+gr_levels <- list_along(seq(1, 25))
+cnt <- 0
+for (res in endos) {
+  for (shock in endos) {
+    cnt <- cnt + 1
+    gr_levels[[cnt]] <- b_irf(levels, res, shock)
+  }
+}
+ggarrange(plotlist = gr_levels)
+fig_7_1 = gr_levels[[5]] + ggtitle("GDP")
+fig_7_2 = gr_levels[[4]] + ggtitle("Employment")
+fig_7_3 = gr_levels[[3]] + ggtitle("Interest rate")
+fig_7_4 = gr_levels[[2]] + ggtitle("Exchange rate")
+
+fig_7 = ggarrange(fig_7_1, fig_7_2, fig_7_3, fig_7_4) |> 
+  annotate_figure(top = text_grob("Effect of orthogonal epu shock", 
+               face = "bold", size = 48))
+print(fig_7)
+gg.save(fig_7, "fig_7")
+
+
+```

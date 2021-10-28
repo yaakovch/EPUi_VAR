@@ -1,0 +1,71 @@
+---
+title: "EPUi"
+author: "Yaakov Chen Zion"
+date: "4/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r Load Packages and Data}
+rm(list = ls())
+library(pacman)
+p_load(
+  vars,
+  savrs,
+  tidyverse,
+  readxl,
+  tsbox
+)
+df <- read_excel("EPUI_Data_All.xlsx", sheet = "Data") %>% 
+  select(year, month, epu, i_il,
+         ex_us, emp_il, ta_35, meshulav) %>% 
+  mutate(epu = log(epu)) %>% 
+  mutate(i_il = log(i_il)) %>% 
+  mutate(ex_us = log(ex_us)) %>% 
+  mutate(emp_il = 100 * log(emp_il)) %>% 
+  mutate(ta_35 = log(ta_35)) %>% 
+  mutate(meshulav = 100 * log(meshulav)) %>% 
+  mutate(l_epu = epu - lag(epu)) %>% 
+  mutate(l_i_il = i_il - lag(i_il)) %>% 
+  mutate(l_ex_us = ex_us - lag(ex_us)) %>% 
+  mutate(l_emp_il = emp_il - lag(emp_il)) %>% 
+  mutate(l_ta_35 = ta_35 - lag(ta_35)) %>% 
+  mutate(l_meshulav = meshulav - lag(meshulav)) %>% 
+  filter(year <= 2019) %>% 
+  filter(year >= 2011)
+
+
+irf = df %>% select(epu, ex_us, i_il, emp_il, meshulav) %>% 
+  ts(start = c(2010, 1), frequency = 12) %>% 
+  VAR(p = 12) %>%
+  irf(n.ahead = 36, impulse = "epu") %>% 
+  plot()
+irf = df %>% select(epu, ex_us, i_il, emp_il, meshulav) %>% 
+  ts(start = c(2010, 1), frequency = 12) %>% 
+  VAR(ic = "AIC") %>%
+  irf(n.ahead = 36, impulse = "epu") %>% 
+  plot()
+ 
+ irf = df %>% select(l_epu, l_ex_us,
+                     l_i_il, l_emp_il, l_meshulav) %>% 
+  ts(start = c(2010, 1), frequency = 12) %>% 
+  VAR(p = 12) %>%
+  irf(n.ahead = 36, impulse = "l_epu") %>% 
+  plot()
+irf = df %>% select(l_epu, l_ex_us,
+                    l_i_il, l_emp_il, l_meshulav) %>% 
+  ts(start = c(2010, 1), frequency = 12) %>% 
+  VAR(ic = "AIC") %>%
+  irf(n.ahead = 36, impulse = "l_epu") %>% 
+  plot()
+
+df %>% select(l_epu, l_emp_il, meshulav, month, year) %>%
+  mutate(time = year + (1/12) * month) %>% 
+  ggplot() + geom_line(aes(x = time, y = l_epu)) +
+   geom_line(aes(x = time, y = meshulav))
+```
+
